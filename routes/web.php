@@ -8,4 +8,4 @@ Route::get('/', [DeviceController::class, 'dashboard'])->name('dashboard');
 
 Route::resource('devices', DeviceController::class);
 Route::get('devices/{device}/print-logs', [DeviceController::class, 'printLogs'])->name('devices.print-logs');
-Route::resource('devices.logs', DowntimeLogController::class)->shallow()->only(['store', 'update']);
+Route::resource('devices.logs', DowntimeLogController::class)->shallow()->only(['store', 'edit', 'update', 'destroy']);

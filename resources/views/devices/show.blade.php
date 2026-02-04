@@ -39,7 +39,8 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
                         Report Downtime
                     </button>
-                    <a href="{{ route('devices.edit', $device) }}" class="btn btn-ghost-primary">Edit Device</a>
+                    <button type="button" class="btn btn-ghost-primary" onclick="openEditModal({{ $device->id }})">Edit Device</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteDevice({{ $device->id }}, '{{ $device->name }}')">Delete Device</button>
                 </div>
             </div>
         </div>
@@ -103,14 +104,11 @@
                     <h3 class="card-title">Maintenance & Downtime History</h3>
                 </div>
                 <div class="table-responsive">
-                    <table class="table table-vcenter table-nowrap card-table">
+                    <table class="table table-vcenter card-table">
                         <thead>
                             <tr>
-                                <th class="text-uppercase text-muted small">Down At</th>
-                                <th class="text-uppercase text-muted small">Up At</th>
-                                <th class="text-uppercase text-muted small">Duration</th>
-                                <th class="text-uppercase text-muted small">Reason</th>
-                                <th class="text-uppercase text-muted small">Impact</th>
+                                <th class="text-uppercase text-muted small">Date & Duration</th>
+                                <th class="text-uppercase text-muted small">Issue Details</th>
                                 <th class="w-1"></th>
                             </tr>
                         </thead>
@@ -118,45 +116,43 @@
                             @forelse($device->downtimeLogs as $log)
                             <tr>
                                 <td>
-                                    <div class="small">{{ $log->down_at->format('M d, Y') }}</div>
-                                    <div class="text-muted small">{{ $log->down_at->format('H:i') }}</div>
-                                </td>
-                                <td>
+                                    <div class="small fw-bold">{{ $log->down_at->format('M d, Y H:i') }}</div>
                                     @if($log->up_at)
-                                        <div class="small">{{ $log->up_at->format('M d, Y') }}</div>
-                                        <div class="text-muted small">{{ $log->up_at->format('H:i') }}</div>
+                                        <div class="text-muted small">to {{ $log->up_at->format('M d, H:i') }}</div>
+                                        @if($log->duration_minutes)
+                                            @php
+                                                $hours = floor($log->duration_minutes / 60);
+                                                $minutes = $log->duration_minutes % 60;
+                                            @endphp
+                                            <span class="badge bg-blue-lt">{{ $hours }}h {{ $minutes }}m</span>
+                                        @endif
                                     @else
-                                        <span class="badge badge-pill bg-red-lt">Still Down</span>
+                                        <span class="badge bg-red-lt">Still Down</span>
                                     @endif
                                 </td>
                                 <td>
-                                    @if($log->up_at && $log->duration_minutes)
-                                        @php
-                                            $hours = floor($log->duration_minutes / 60);
-                                            $minutes = $log->duration_minutes % 60;
-                                        @endphp
-                                        <span class="text-muted">{{ $hours }}h {{ $minutes }}m</span>
-                                    @else
-                                        <span class="text-muted">—</span>
-                                    @endif
+                                    <div class="fw-bold mb-1">{{ $log->reason }}</div>
+                                    <div class="text-muted small">{{ $log->effect }}</div>
                                 </td>
                                 <td>
-                                    <div class="text-truncate" style="max-width: 200px;" title="{{ $log->reason }}">{{ $log->reason }}</div>
-                                </td>
-                                <td>
-                                    <div class="text-truncate text-muted" style="max-width: 200px;" title="{{ $log->effect }}">{{ $log->effect }}</div>
-                                </td>
-                                <td>
-                                    @if(!$log->up_at)
-                                        <button type="button" class="btn btn-sm btn-success" onclick="resolveLog({{ $log->id }})">
-                                            Resolve
+                                    <div class="btn-list">
+                                        <button type="button" class="btn btn-sm btn-ghost-primary" onclick="editLog({{ $log->id }})">
+                                            Edit
                                         </button>
-                                    @endif
+                                        @if(!$log->up_at)
+                                            <button type="button" class="btn btn-sm btn-success" onclick="resolveLog({{ $log->id }})">
+                                                Resolve
+                                            </button>
+                                        @endif
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="deleteLog({{ $log->id }})">
+                                            Delete
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-5">
+                                <td colspan="3" class="text-center text-muted py-5">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-muted mb-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="M9 14l2 2l4 -4" /></svg>
                                     <div>No maintenance records found</div>
                                 </td>
@@ -236,8 +232,319 @@
 @endif
 @endif
 
+<!-- Delete Confirmation Modal -->
+<div class="modal modal-blur fade" id="deleteDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="modal-title">Delete Device</div>
+                <div class="text-muted">Are you sure you want to delete <strong id="deleteDeviceName"></strong>? This will also delete all downtime logs. This action cannot be undone.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteDeviceBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Log Modal -->
+<div class="modal modal-blur fade" id="deleteLogModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="modal-title">Delete Log</div>
+                <div class="text-muted">Are you sure you want to delete this downtime log? This action cannot be undone.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteLogBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Device Modal -->
+<div class="modal modal-blur fade" id="editDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="editDeviceForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Device</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label required">Category</label>
+                            <select name="category" id="editCategorySelect" class="form-select" required>
+                                <option value="metro">Metro</option>
+                                <option value="genset">Genset</option>
+                                <option value="nap">NAP</option>
+                                <option value="exchange">Exchange</option>
+                                <option value="active_device">Active Device</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">Device Name</label>
+                            <input type="text" name="name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">Location</label>
+                            <input type="text" name="location" class="form-control" required>
+                        </div>
+                        <div id="editIpContainer" class="col-md-6 d-none">
+                            <label class="form-label">IP Address</label>
+                            <input type="text" name="ip_address" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Current Status</label>
+                            <select name="current_status" class="form-select">
+                                <option value="online">Online</option>
+                                <option value="offline">Offline</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Device</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Log Modal -->
+<div class="modal modal-blur fade" id="editLogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="editLogForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Downtime Log</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label required">Down At</label>
+                            <input type="datetime-local" name="down_at" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Up At</label>
+                            <input type="datetime-local" name="up_at" class="form-control">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label required">Reason</label>
+                            <textarea name="reason" class="form-control" rows="3" required></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label required">Effect/Impact</label>
+                            <textarea name="effect" class="form-control" rows="3" required></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Log</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+let deleteDeviceId = null;
+let deleteLogId = null;
+let editLogId = null;
+const deleteDeviceModal = new bootstrap.Modal(document.getElementById('deleteDeviceModal'));
+const deleteLogModal = new bootstrap.Modal(document.getElementById('deleteLogModal'));
+const editDeviceModal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
+const editLogModal = new bootstrap.Modal(document.getElementById('editLogModal'));
+const editForm = document.getElementById('editDeviceForm');
+const editLogForm = document.getElementById('editLogForm');
+const editCategorySelect = document.getElementById('editCategorySelect');
+const editIpContainer = document.getElementById('editIpContainer');
+
+function editLog(logId) {
+    editLogId = logId;
+    fetch(`/logs/${logId}/edit`)
+        .then(res => res.json())
+        .then(log => {
+            editLogForm.querySelector('[name="down_at"]').value = log.down_at.slice(0, 16);
+            editLogForm.querySelector('[name="up_at"]').value = log.up_at ? log.up_at.slice(0, 16) : '';
+            editLogForm.querySelector('[name="reason"]').value = log.reason;
+            editLogForm.querySelector('[name="effect"]').value = log.effect;
+            editLogModal.show();
+        })
+        .catch(error => {
+            Swal.fire('Error', 'Failed to load log data', 'error');
+        });
+}
+
+editLogForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(editLogForm);
+    const data = {};
+    formData.forEach((value, key) => data[key] = value);
+    
+    fetch(`/logs/${editLogId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        editLogModal.hide();
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: 'Log updated successfully',
+            timer: 2000,
+            showConfirmButton: false
+        }).then(() => {
+            window.location.reload();
+        });
+    })
+    .catch(error => {
+        Swal.fire('Error', 'Failed to update log', 'error');
+    });
+});
+
+function openEditModal(deviceId) {
+    fetch(`/devices/${deviceId}/edit`)
+        .then(res => res.json())
+        .then(device => {
+            editForm.querySelector('[name="category"]').value = device.category;
+            editForm.querySelector('[name="name"]').value = device.name;
+            editForm.querySelector('[name="location"]').value = device.location;
+            editForm.querySelector('[name="ip_address"]').value = device.ip_address || '';
+            editForm.querySelector('[name="current_status"]').value = device.current_status;
+            editForm.querySelector('[name="description"]').value = device.description || '';
+            toggleEditIpField();
+            editDeviceModal.show();
+        });
+}
+
+function toggleEditIpField() {
+    if (editCategorySelect.value === 'active_device') {
+        editIpContainer.classList.remove('d-none');
+    } else {
+        editIpContainer.classList.add('d-none');
+    }
+}
+
+editCategorySelect.addEventListener('change', toggleEditIpField);
+
+editForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(editForm);
+    const data = {};
+    formData.forEach((value, key) => data[key] = value);
+    
+    fetch(`/devices/{{ $device->id }}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        editDeviceModal.hide();
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: data.message,
+            timer: 2000,
+            showConfirmButton: false
+        }).then(() => {
+            window.location.reload();
+        });
+    })
+    .catch(error => {
+        Swal.fire('Error', 'Failed to update device', 'error');
+    });
+});
+
+function confirmDeleteDevice(deviceId, deviceName) {
+    deleteDeviceId = deviceId;
+    document.getElementById('deleteDeviceName').textContent = deviceName;
+    deleteDeviceModal.show();
+}
+
+function deleteLog(logId) {
+    deleteLogId = logId;
+    deleteLogModal.show();
+}
+
+document.getElementById('confirmDeleteDeviceBtn').addEventListener('click', function() {
+    fetch(`/devices/${deleteDeviceId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        deleteDeviceModal.hide();
+        Swal.fire({
+            icon: 'success',
+            title: 'Deleted!',
+            text: data.message,
+            timer: 2000,
+            showConfirmButton: false
+        }).then(() => {
+            window.location.href = '/devices';
+        });
+    })
+    .catch(error => {
+        deleteDeviceModal.hide();
+        Swal.fire('Error', 'Failed to delete device', 'error');
+    });
+});
+
+document.getElementById('confirmDeleteLogBtn').addEventListener('click', function() {
+    fetch(`/logs/${deleteLogId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        deleteLogModal.hide();
+        Swal.fire({
+            icon: 'success',
+            title: 'Deleted!',
+            text: 'Log deleted successfully',
+            timer: 2000,
+            showConfirmButton: false
+        }).then(() => {
+            window.location.reload();
+        });
+    })
+    .catch(error => {
+        deleteLogModal.hide();
+        Swal.fire('Error', 'Failed to delete log', 'error');
+    });
+});
 function resolveLog(logId) {
     const form = document.createElement('form');
     form.method = 'POST';

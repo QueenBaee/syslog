@@ -37,7 +37,7 @@ class DeviceController extends Controller
             $query->where('category', $request->category);
         }
         
-        $devices = $query->latest()->paginate(15)->withQueryString();
+        $devices = $query->latest()->paginate(20)->withQueryString();
         
         return view('devices.index', compact('devices'));
     }
@@ -95,7 +95,10 @@ class DeviceController extends Controller
     public function destroy(Device $device)
     {
         $device->delete();
-        return redirect()->route('devices.index')->with('success', 'Device deleted successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Device deleted successfully'
+        ]);
     }
 
     public function printLogs(Request $request, Device $device)
@@ -113,6 +116,7 @@ class DeviceController extends Controller
         }
         
         $pdf = Pdf::loadView('devices.pdf', compact('device', 'periodText'));
-        return $pdf->download('device_log_' . $device->id . '_' . now()->format('Y-m-d') . '.pdf');
+        $filename = str_replace(' ', '_', $device->name) . '_' . now()->format('Y-m-d') . '.pdf';
+        return $pdf->download($filename);
     }
 }

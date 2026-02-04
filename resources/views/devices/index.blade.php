@@ -92,6 +92,7 @@
                             <div class="btn-list">
                                 <button type="button" class="btn btn-sm btn-ghost-primary" onclick="openModal('edit', {{ $device->id }})">Edit</button>
                                 <a href="{{ route('devices.show', $device) }}" class="btn btn-sm btn-primary">View</a>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete({{ $device->id }}, '{{ $device->name }}')">Delete</button>
                             </div>
                         </td>
                     </tr>
@@ -104,8 +105,15 @@
             </table>
         </div>
         @if($devices->hasPages())
-        <div class="card-footer d-flex align-items-center">
-            {{ $devices->links() }}
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted small">
+                    Showing {{ $devices->firstItem() }} to {{ $devices->lastItem() }} of {{ $devices->total() }} results
+                </div>
+                <nav>
+                    {{ $devices->onEachSide(2)->links('custom-pagination') }}
+                </nav>
+            </div>
         </div>
         @endif
     </div>
@@ -177,6 +185,22 @@
         </div>
     </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal modal-blur fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="modal-title">Are you sure?</div>
+                <div class="text-muted">Do you really want to delete <strong id="deviceName"></strong>? This action cannot be undone.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -184,11 +208,46 @@
 <script>
 let modalMode = 'create';
 let currentDeviceId = null;
+let deleteDeviceId = null;
 const modal = new bootstrap.Modal(document.getElementById('deviceModal'));
+const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
 const form = document.getElementById('deviceForm');
 const categorySelect = document.getElementById('categorySelect');
 const ipContainer = document.getElementById('ip-container');
 const ipInput = document.getElementById('ipInput');
+
+function confirmDelete(deviceId, deviceName) {
+    deleteDeviceId = deviceId;
+    document.getElementById('deviceName').textContent = deviceName;
+    deleteModal.show();
+}
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    fetch(`/devices/${deleteDeviceId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        deleteModal.hide();
+        Swal.fire({
+            icon: 'success',
+            title: 'Deleted!',
+            text: data.message,
+            timer: 2000,
+            showConfirmButton: false
+        }).then(() => {
+            window.location.reload();
+        });
+    })
+    .catch(error => {
+        deleteModal.hide();
+        Swal.fire('Error', 'Failed to delete device', 'error');
+    });
+});
 
 function openModal(mode, deviceId = null) {
     modalMode = mode;
