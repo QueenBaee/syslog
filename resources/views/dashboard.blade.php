@@ -5,7 +5,17 @@
 @section('content')
 <div class="container-xl">
     <div class="page-header d-print-none mb-4">
-        <h1 class="page-title">Network Status Dashboard</h1>
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="page-title">Network Status Dashboard</h1>
+            </div>
+            <div class="col-auto ms-auto">
+                <form method="POST" action="{{ route('logout') }}" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-ghost-secondary">Logout</button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <div class="row row-deck row-cards g-3 mb-4">

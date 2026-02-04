@@ -41,6 +41,10 @@
                     </button>
                     <button type="button" class="btn btn-ghost-primary" onclick="openEditModal({{ $device->id }})">Edit Device</button>
                     <button type="button" class="btn btn-danger" onclick="confirmDeleteDevice({{ $device->id }}, '{{ $device->name }}')">Delete Device</button>
+                    <form method="POST" action="{{ route('logout') }}" class="d-inline">
+                        @csrf
+                        <button type="submit" class="btn btn-ghost-secondary">Logout</button>
+                    </form>
                 </div>
             </div>
         </div>
